@@ -35,22 +35,19 @@
          :local-weight weight
          :children children-nodes)))))
 
-(defun last-two (lst)
-  (if (= 2 (length lst))
-    lst
-    (last-two (cdr lst))))
-
 (defun unbalanced-child (node)
-  (let
-    ((sorted-children (sort (node-children node) #'< :key #'node-total-weight)))
-    (match sorted-children
-      ((cons a (cons b _))
-       (if (/= (node-total-weight a) (node-total-weight b))
-         (cons a (- (node-total-weight a) (node-total-weight b)))
-         (match (last-two sorted-children)
-           ((list y z)
-            (when (/= (node-total-weight y) (node-total-weight z))
-              (cons z (- (node-total-weight z) (node-total-weight y)))))))))))
+  (let*
+    ((sorted-children (sort (coerce (node-children node) 'vector) #'< :key #'node-total-weight))
+     (len (length sorted-children)))
+    (match
+      (mapcar (lambda (i) (aref sorted-children i)) (list 0 1 (- len 2) (- len 1)))
+      ((list a b y z)
+       (cond
+         ((/= (node-total-weight a) (node-total-weight b))
+          (cons a (- (node-total-weight a) (node-total-weight b))))
+         ((/= (node-total-weight y) (node-total-weight z))
+          (cons z (- (node-total-weight z) (node-total-weight y))))
+         (t nil))))))
 
 (defun follow-unbalance (tree)
   (match (unbalanced-child tree)
