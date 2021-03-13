@@ -28,19 +28,47 @@
         (setf (aref vec b-mod) tmp)
         (rec (1+ a) (1- b))))))
 
-(defun hash-round (lengths vec &optional (current-position 0) (skip-size 0))
-  (when lengths
-    (partial-reverse vec current-position (car lengths))
-    (hash-round
-      (cdr lengths)
-      vec
-      (mod (+ current-position (car lengths) skip-size) (length vec))
-      (1+ skip-size))))
+(defun hash-round (lengths vec current-position skip-size)
+  (if lengths
+    (progn
+      (partial-reverse vec current-position (car lengths))
+      (hash-round
+        (cdr lengths)
+        vec
+        (mod (+ current-position (car lengths) skip-size) (length vec))
+        (1+ skip-size)))
+    (values current-position skip-size)))
+
+(defun slice-list (lst len)
+  (when lst
+    (cons
+      (subseq lst 0 len)
+      (slice-list (subseq lst len) len))))
+
+(defun sparse-hash (lengths)
+  (let ((vec (create-vector 256)))
+    (nlet rec ((rounds 64) (current-position 0) (skip-size 0))
+      (if (zerop rounds)
+        (coerce vec 'list)
+        (multiple-value-bind (cp ss) (hash-round lengths vec current-position skip-size)
+          (rec (1- rounds) cp ss))))))
+
+(defun knot-hash (str)
+  (let ((lengths (concatenate 'list (map 'list #'char-code str) '(17 31 73 47 23))))
+    (string-downcase
+      (apply
+        #'concatenate
+        (cons
+          'string
+          (mapcar
+            (lambda (blk) (format nil "~2,'0x" (apply #'logxor blk)))
+            (slice-list (sparse-hash lengths) 16)))))))
 
 (defun main ()
   (let
-    ((input (mapcar #'parse-integer (split "," (car (read-input-as-list 10)))))
+    ((input (car (read-input-as-list 10)))
      (vec (create-vector 256)))
-    (hash-round input vec)
-    (print (* (aref vec 0) (aref vec 1)))))
+    (hash-round (mapcar #'parse-integer (split "," input)) vec 0 0)
+    (format t "~a~%" (* (aref vec 0) (aref vec 1)))
+    (format t "~a~%" (knot-hash input))))
 
