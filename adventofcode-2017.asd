@@ -6,6 +6,7 @@
                         :aoc-coord
                         :cl-ppcre
                         :fset
+                        :functional-queue
                         :serapeum)
            :components ((:file "day01")
                         (:file "day02")
@@ -17,4 +18,5 @@
                         (:file "day08")
                         (:file "day09")
                         (:file "day10")
-                        (:file "day11")))
+                        (:file "day11")
+                        (:file "day12")))
