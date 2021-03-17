@@ -8,7 +8,8 @@
                         :fset
                         :functional-queue
                         :serapeum)
-           :components ((:file "day01")
+           :components ((:file "knot-hash")
+                        (:file "day01")
                         (:file "day02")
                         (:file "day03")
                         (:file "day04")
@@ -20,4 +21,5 @@
                         (:file "day10")
                         (:file "day11")
                         (:file "day12")
-                        (:file "day13")))
+                        (:file "day13")
+                        (:file "day14")))
