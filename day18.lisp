@@ -20,27 +20,34 @@
             (parse-integer (third tokens))))))))
 
 (defun get-value (x registers)
-  (if (characterp x) (lookup registers x) x))
+  (when x (if (characterp x) (lookup registers x) x)))
+
+(defun common-functions (prog-line i registers)
+  (match prog-line
+    ((list instr x y)
+     (let
+       ((val-x (get-value x registers))
+        (val-y (get-value y registers)))
+       (case instr
+         (:|set| (cons (1+ i) (with registers x val-y)))
+         (:|add| (cons (1+ i) (with registers x (+   val-x val-y))))
+         (:|mul| (cons (1+ i) (with registers x (*   val-x val-y))))
+         (:|mod| (cons (1+ i) (with registers x (mod val-x val-y))))
+         (:|jgz| (cons (if (> val-x 0) (+ i val-y) (1+ i)) registers)))))))
 
 (defun run-program (program)
   (nlet rec ((i 0) (last-note 0) (registers (empty-map 0)))
-    (match (aref program i)
-      ((list :|snd| freq nil)
-       (rec (1+ i) (get-value freq registers) registers))
-      ((list :|set| reg y)
-       (rec (1+ i) last-note (with registers reg (get-value y registers))))
-      ((list :|add| reg y)
-       (rec (1+ i) last-note (with registers reg (+ (lookup registers reg) (get-value y registers)))))
-      ((list :|mul| reg y)
-       (rec (1+ i) last-note (with registers reg (* (lookup registers reg) (get-value y registers)))))
-      ((list :|mod| reg y)
-       (rec (1+ i) last-note (with registers reg (mod (lookup registers reg) (get-value y registers)))))
-      ((list :|rcv| x nil)
-       (if (zerop (get-value x registers)) (rec (1+ i) last-note registers) last-note))
-      ((list :|jgz| x y)
-       (rec (if (> (get-value x registers) 0) (+ i (get-value y registers)) (1+ i)) last-note registers)))))
+    (let ((prog-line (aref program i)))
+      (match prog-line
+        ((list instr x _)
+         (case instr
+           (:|snd| (rec (1+ i) (get-value x registers) registers))
+           (:|rcv| (if (zerop (get-value x registers)) (rec (1+ i) last-note registers) last-note))
+           (otherwise
+             (match (common-functions prog-line i registers)
+               ((cons new-i new-registers) (rec new-i last-note new-registers))))))))))
 
 (defun main ()
   (let
-    ((input (read-input-as-list 18 #'parse-line)))
-    (print (run-program (coerce input 'vector)))))
+    ((input (coerce (read-input-as-list 18 #'parse-line) 'vector)))
+    (print (run-program input))))
