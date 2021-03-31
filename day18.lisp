@@ -1,5 +1,5 @@
 (defpackage :day18
-  (:use :cl :aoc-misc)
+  (:use :cl :aoc-misc :functional-queue)
   (:import-from :cl-ppcre :split)
   (:import-from :serapeum :nlet)
   (:import-from :trivia :match)
@@ -8,16 +8,19 @@
 
 (in-package :day18)
 
+(defun reg-or-int (str)
+  (when str
+    (let ((first-char (char str 0)))
+      (if (and (char>= first-char #\a) (char<= first-char #\z))
+        first-char
+        (parse-integer str)))))
+
 (defun parse-line (line)
   (let ((tokens (split " " line)))
     (list
-      (intern (first tokens) "KEYWORD")
-      (char (second tokens) 0)
-      (when (third tokens)
-        (let ((first-char (char (third tokens) 0)))
-          (if (and (char>= first-char #\a) (char<= first-char #\z))
-            first-char
-            (parse-integer (third tokens))))))))
+      (intern (first  tokens) "KEYWORD")
+      (reg-or-int (second tokens))
+      (reg-or-int (third  tokens)))))
 
 (defun get-value (x registers)
   (when x (if (characterp x) (lookup registers x) x)))
@@ -47,7 +50,49 @@
              (match (common-functions prog-line i registers)
                ((cons new-i new-registers) (rec new-i last-note new-registers))))))))))
 
+(defun run-program2 (program)
+  (nlet rec ((state       (list 0 0 (with (empty-map 0) #\p 0)))
+             (state-other (list 1 0 (with (empty-map 0) #\p 1)))
+             (queue-input  (empty-queue))
+             (queue-output (empty-queue))
+             (count 0))
+    (match state
+      ((list id ptr registers)
+       (let ((prog-line (aref program ptr)))
+         (match prog-line
+           ((list instr x _)
+            (case instr
+              (:|snd|
+                (rec
+                  (list id (1+ ptr) registers)
+                  state-other
+                  queue-input
+                  (queue-snoc queue-output (get-value x registers))
+                  (if (= 1 id) (1+ count) count)))
+              (:|rcv|
+                (if (queue-empty-p queue-input)
+                  (if (queue-empty-p queue-output)
+                    count
+                    (rec state-other state queue-output queue-input count))
+                  (rec 
+                    (list id (1+ ptr) (with registers x (queue-head queue-input)))
+                    state-other
+                    (queue-tail queue-input)
+                    queue-output
+                    count)))
+              (otherwise
+                (match (common-functions prog-line ptr registers)
+                  ((cons new-ptr new-registers)
+                   (rec
+                     (list id new-ptr new-registers)
+                     state-other
+                     queue-input
+                     queue-output
+                     count))))))))))))
+
 (defun main ()
   (let
-    ((input (coerce (read-input-as-list 18 #'parse-line) 'vector)))
-    (print (run-program input))))
+    ((program (coerce (read-input-as-list 18 #'parse-line) 'vector)))
+    (print (run-program  program))
+    (print (run-program2 program))))
+
