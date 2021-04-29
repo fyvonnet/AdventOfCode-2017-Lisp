@@ -1,38 +1,60 @@
 (defpackage :day22
   (:use :cl :aoc-misc :aoc-coord)
-  (:import-from :fset :contains? :empty-set :less :with)
+  (:import-from :fset :empty-map :lookup :with)
+  (:import-from :serapeum :nlet)
   (:export main))
 
 (in-package :day22)
 
-
-(defun add-row (row r set &optional (c 0))
+(defun add-row (row r map &optional (c 0))
   (if (null row)
-    set
-    (add-row (cdr row) r (if (char= #\# (car row)) (with set (make-coord c r)) set) (1+ c))))
+    map
+    (add-row
+      (cdr row)
+      r
+      (if (char= #\# (car row)) (with map (make-coord c r) 'infected) map)
+      (1+ c))))
 
-(defun create-set (rows &optional (r 0) (set (empty-set)))
+(defun create-map (rows &optional (r 0) (map (empty-map 'clean)))
   (if (null rows)
-    set
-    (create-set (cdr rows) (1+ r) (add-row (coerce (car rows) 'list) r set))))
+    map
+    (create-map
+      (cdr rows)
+      (1+ r)
+      (add-row (coerce (car rows) 'list)r map))))
 
-(defun work (coord set &optional (direction 'north) (moves 10000) (count 0))
-  (if (zerop moves)
-    count
-    (destructuring-bind (new-direction new-count new-set)
-      (if (contains? set coord)
-        (list (turn 'right direction)     count  (less set coord))
-        (list (turn 'left  direction) (1+ count) (with set coord)))
-      (work (next-coord new-direction coord) new-set new-direction (1- moves) new-count))))
+(defun make-work-func (coord nodes-map)
+  (lambda (rules moves)
+    (nlet rec ((coord coord) (map nodes-map) (m moves) (direction 'north) (count 0))
+      (if (zerop m)
+        count
+        (destructuring-bind (turn-direction count-increment new-state)
+          (cdr (assoc (lookup map coord) rules))
+          (let ((new-direction (turn turn-direction direction)))
+            (rec
+              (next-coord new-direction coord)
+              (with map coord new-state)
+              (1- m)
+              new-direction
+              (+ count count-increment))))))))
 
 (defun main ()
   (let*
-    ;((input (read-input-as-list 22 #'identity "test"))
     ((input (read-input-as-list 22))
-     (height (length input))
-     (width (length (car input)))
-     (infected (create-set input))
-     (start-coord (apply #'make-coord (mapcar (lambda (x) (floor (/ x 2))) (list width height))))
-     )
-    (print (work start-coord infected))
-    ))
+     (work
+       (make-work-func
+         (apply
+           #'make-coord
+           (mapcar
+             (lambda (x) (floor (/ (length x) 2)))
+             (list input (car input))))
+         (create-map input))))
+    (dolist 
+      (p '((((infected right 0 clean)
+             (clean    left  1 infected)) . 10000)
+           (((clean    left  0 weakened)
+             (weakened front 1 infected)
+             (infected right 0 flagged)
+             (flagged  back  0 clean)) . 10000000)))
+      (format t "~a~%" (funcall work (car p) (cdr p))))))
+
