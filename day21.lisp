@@ -1,113 +1,106 @@
 (defpackage :day21
   (:use :cl :aoc-misc)
-  (:import-from :cl-ppcre :scan-to-strings :split :regex-replace-all)
-  (:import-from :fset :convert :empty-map :lookup :with)
-  (:import-from :trivia :match)
+  (:import-from :cl-ppcre :split)
+  (:import-from :fset :empty-map :lookup :with)
   (:import-from :serapeum :nlet)
   (:export main))
 
 (in-package :day21)
 
-(defun rotate (pattern &optional lines)
-  (if (null (first pattern))
-    lines
-    (rotate
+
+(defun rotate-pattern (pattern &optional output)
+  (if (null (car pattern))
+    output
+    (rotate-pattern
       (mapcar #'cdr pattern)
-      (cons (mapcar #'car pattern) lines))))
+      (cons
+        (mapcar #'car pattern)
+        output))))
 
-(defun all-rotations (rots pattern &optional (n 4))
-  (if (zerop n)
-    rots
-    (all-rotations
-      (cons (coerce (apply #'append pattern) 'string)  rots)
-      (rotate pattern)
-      (1- n))))
+(defun all-pattern-rotations (pattern &optional (n 4))
+  (unless (zerop n)
+    (cons
+      pattern
+      (all-pattern-rotations (rotate-pattern pattern) (1- n)))))
 
-(defun all-variants (pattern)
-  (reduce
-    #'all-rotations
-    (list pattern (mapcar #'reverse pattern))
-    :initial-value nil))
+(defun all-pattern-variants (pattern)
+  (apply
+    #'append
+    (mapcar #'all-pattern-rotations (list pattern (mapcar #'reverse pattern)))))
 
-(defun add-line (map line)
-  (multiple-value-bind (_ matches) (scan-to-strings "^(.+) => (.+)$" line)
-    (reduce
-      (lambda (m k) (with m k (regex-replace-all "/" (aref matches 1) "")))
-      (all-variants (mapcar (lambda (x) (coerce x 'list)) (split "/" (aref matches 0))))
-      :initial-value map)))
+(defun get-positions (size)
+  (let ((div (if (zerop (mod size 2)) 2 3)))
+    (nlet rec ((n 0) (pos nil))
+      (if (= n size)
+        (reverse pos)
+        (rec (+ div n) (cons (cons n (+ div n)) pos))))))
 
-(defun make-coordinates (ncoords side corner factor)
-  (nlet rec ((n (1- ncoords)) (coords nil))
-    (if (= -1 n)
-      coords
-      (multiple-value-bind (y x) (floor n side)
-        (rec
-          (1- n)
-          (cons
-            (cons
-              (* (+ (car corner) x) factor)
-              (* (+ (cdr corner) y) factor))
-            coords))))))
+(defun string-to-pattern (str)
+  (mapcar
+    (lambda (s) (coerce s 'list))
+    (split "/" str)))
 
-(defun make-corners-coords (squares-per-side square-size)
-  (make-coordinates (* squares-per-side squares-per-side) squares-per-side (cons 0 0) square-size))
+(defun enhance-stripe (positions book)
+  (lambda (stripe)
+    (mapcar ; squares
+      (lambda (p) (lookup book p))
+      (mapcar ; positions
+        (lambda (p)
+          (mapcar ; lines
+            (lambda (l) (subseq l (car p) (cdr p)))
+            stripe))
+        positions))))
 
-(defun get-square (pattern corner square-size)
+(defun squares-to-lines (stripe)
+  (unless (null (car stripe))
+    (cons 
+      (apply #'append (mapcar #'car stripe))
+      (squares-to-lines (mapcar #'cdr stripe)))))
+
+(defun enhance-pattern (pattern book)
   (let*
-    ((npixels (* square-size square-size))
-     (str (make-string npixels)))
-    (nlet rec ((coords (make-coordinates npixels square-size corner 1)) (n 0))
-      (if (null coords)
-        str
-        (progn
-          (setf (aref str n) (aref pattern (cdar coords) (caar coords)))
-          (rec (cdr coords) (1+ n)))))))
+    ((len (length pattern))
+     (positions (get-positions len))
+     (stripes 
+       (mapcar
+         (lambda (p) (subseq pattern (car p) (cdr p)))
+         positions))
+     (converted-stripes
+       (mapcar (enhance-stripe positions book) stripes)))
+    (apply #'append (mapcar #'squares-to-lines converted-stripes))))
 
-(defun set-square (pattern corner square-size str)
-  (let*
-    ((npixels (* square-size square-size)))
-    (nlet rec ((coords (make-coordinates npixels square-size corner 1)) (n 0))
-      (when coords
-        (progn
-          (setf (aref pattern (cdar coords) (caar coords)) (aref str n))
-          (rec (cdr coords) (1+ n)))))))
-
-(defun update-pattern (dictionary pattern)
-  (let*
-    ((size (array-dimension pattern 0))
-     (div-by-two (zerop (mod size 2)))
-     (square-size (if div-by-two 2 3))
-     (new-square-size (if div-by-two 3 4))
-     (squares-per-side (/ size square-size))
-     (corners (make-corners-coords squares-per-side square-size))
-     (squares (mapcar (lambda (c) (get-square pattern c square-size)) corners))
-     (new-corners (make-corners-coords squares-per-side new-square-size))
-     (new-squares (mapcar (lambda (s) (lookup dictionary s)) squares))
-     (new-size (* squares-per-side  new-square-size))
-     (new-pattern (make-array (list new-size new-size) :element-type 'character)))
-    (mapcar (lambda (c s) (set-square new-pattern c new-square-size s)) new-corners new-squares)
-    new-pattern))
-
-(defun multiple-updates (dictionary pattern n)
+(defun multiple-enhancements (n pattern book)
   (if (zerop n)
     pattern
-    (multiple-updates dictionary (update-pattern dictionary pattern) (1- n))))
+    (multiple-enhancements (1- n) (enhance-pattern pattern book) book)))
+
+(defun add-line-to-rules (book line)
+  (destructuring-bind (input output)
+    (mapcar #'string-to-pattern (split " => " line))
+    (reduce
+      (lambda (b i) (with b i output))
+      (all-pattern-variants input)
+      :initial-value book)))
+
+(defun print-pattern (pattern)
+  (mapcar (lambda (l) (format t "~a~%" (coerce l 'string))) pattern))
+
+(defun count-on-pixels (pattern)
+  (reduce
+    (lambda (tc l) (reduce (lambda (c p) (if (char= p #\#) (1+ c) c)) l :initial-value tc))
+    pattern :initial-value 0))
 
 (defun main ()
   (let*
-    ((start-pattern
-       (make-array '(3 3) :initial-contents '((#\. #\# #\.) (#\. #\. #\#) (#\# #\# #\#))))
-     (dictionary 
+    ((start-pattern (string-to-pattern ".#./..#/###"))
+     (book
        (reduce
-         #'add-line
+         #'add-line-to-rules
          (read-input-as-list 21)
          :initial-value (empty-map)))
-    (end-pattern (multiple-updates dictionary start-pattern 18)))
-    (loop
-      with counter = 0
-      for i below (array-dimension end-pattern 0)
-      do (loop
-           for j below (array-dimension end-pattern 1)
-           do (when (char= #\# (aref end-pattern i j)) (incf counter)))
-      finally (print counter))))
+     (inter-pattern (multiple-enhancements 5 start-pattern book))
+     (final-pattern (multiple-enhancements (- 18 5) inter-pattern book)))
+
+    (print (count-on-pixels inter-pattern))
+    (print (count-on-pixels final-pattern))))
 
