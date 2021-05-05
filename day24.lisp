@@ -15,33 +15,34 @@
   (destructuring-bind (a . b) p
     (if (< a b) (cons a b) (cons b a))))
 
-(defvar *max-strength* 0)
-(defvar *max-length* 0)
-(defvar *max-strength-longest* 0)
+(defun use-next-connectors (connectors-map strength used start next-connectors strength-data)
+  (if (null next-connectors)
+    strength-data
+    (let 
+      ((new-strength-data
+         (check-availability
+           connectors-map
+           (+ strength (car next-connectors))
+           (with used (sort-pair (cons start (car next-connectors))))
+           (car next-connectors)
+           strength-data)))
+      (use-next-connectors connectors-map strength used start (cdr next-connectors) new-strength-data))))
 
-(defun use-next-connectors (connectors-map score used start next-connectors)
-  (unless (null next-connectors)
-    (check-availability
-      connectors-map
-      (+ score (car next-connectors))
-      (with used (sort-pair (cons start (car next-connectors))))
-      (car next-connectors))
-    (use-next-connectors connectors-map score used start (cdr next-connectors))))
-
-(defun check-availability (connectors-map &optional (score 0) (used (empty-set)) (start 0))
-  (let
+(defun check-availability (connectors-map &optional (strength 0) (used (empty-set)) (start 0) (strength-data '(0 0 0)))
+  (let*
     ((next-connectors (remove-if (lambda (c) (contains? used (sort-pair (cons start c)))) (lookup connectors-map start)))
      (len (size used)))
     (if (null next-connectors)
-      (progn
-        (when (> score *max-strength*) (setf *max-strength* score))
-        (when
-          (or
-            (> len *max-length*)
-            (and (eq len *max-length*) (> score *max-strength-longest*)))
-          (setf *max-length* len)
-          (setf *max-strength-longest* score)))
-      (use-next-connectors connectors-map (+ score start) used start next-connectors))))
+      (destructuring-bind (max-strength max-length max-strength-longest) strength-data
+        (cons
+          (if (> strength max-strength) strength max-strength)
+          (if
+            (or
+              (> len max-length)
+              (and (eq len max-length) (> strength max-strength-longest)))
+            (list len strength)
+            (list max-length max-strength-longest))))
+      (use-next-connectors connectors-map (+ strength start) used start next-connectors strength-data))))
 
 (defun main ()
   (let*
@@ -55,6 +56,5 @@
              l :initial-value m))
          (list input (remove-if (lambda (p) (= (first p) (second  p))) (mapcar #'reverse input)))
          :initial-value (empty-map))))
-    (check-availability connectors-map)
-    (print *max-strength*)
-    (print *max-strength-longest*)))
+    (destructuring-bind (ans1 _ ans2) (check-availability connectors-map)
+      (format t "~a~%~a~%" ans1 ans2))))
