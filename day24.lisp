@@ -2,6 +2,7 @@
   (:use :cl :aoc-misc)
   (:import-from :cl-ppcre :split)
   (:import-from :fset :contains? :empty-map :empty-set :lookup :size :with)
+  (:import-from :serapeum :nlet)
   (:export main))
 
 (in-package :day24)
@@ -16,17 +17,17 @@
     (if (< a b) (cons a b) (cons b a))))
 
 (defun use-next-connectors (connectors-map strength used start next-connectors strength-data)
-  (if (null next-connectors)
-    strength-data
-    (let 
-      ((new-strength-data
-         (check-availability
-           connectors-map
-           (+ strength (car next-connectors))
-           (with used (sort-pair (cons start (car next-connectors))))
-           (car next-connectors)
-           strength-data)))
-      (use-next-connectors connectors-map strength used start (cdr next-connectors) new-strength-data))))
+  (nlet rec ((connectors next-connectors) (strength-data strength-data))
+    (if (null connectors)
+      strength-data
+      (rec
+        (cdr connectors)
+        (check-availability
+          connectors-map
+          (+ strength (car connectors))
+          (with used (sort-pair (cons start (car connectors))))
+          (car connectors)
+          strength-data)))))
 
 (defun check-availability (connectors-map &optional (strength 0) (used (empty-set)) (start 0) (strength-data '(0 0 0)))
   (let*
