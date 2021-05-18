@@ -23,6 +23,14 @@
     ((cons 'reg r) (aref registers r))
     ((cons 'val v) v)))
 
+(defun not-prime (x)
+  (let ((end (ceiling (sqrt x))))
+    (nlet rec ((y 2))
+      (unless (> y end)
+        (if (zerop (mod x y))
+          t
+          (rec (1+ y)))))))
+
 (defun main ()
   (let*
     ((program (coerce (read-input-as-list 23 #'parse-line) 'vector))
@@ -44,5 +52,9 @@
           ((list :|jnz| a b)
            (rec
              (if (zerop (get-value a registers)) (1+ index) (+ index (get-value b registers)))
-             mult-count)))))))
+             mult-count))))))
+  ; using values from my input, not a universal solution:
+  (loop for x from 106700 to 123700 by 17
+        counting (not-prime x) into cnt
+        finally (print cnt)))
 
